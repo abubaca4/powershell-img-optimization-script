@@ -20,3 +20,7 @@ jpg_opt_losless.ps1 use jpegtran to losless jpg optimization
 png_opt.ps1 oxipng optimization
 
 png_opt_slow.ps1 oxipng optimization with Zopfli(x100 slower, 2-8% better)
+
+png_opt.ps1 and png_opt_slow.ps1 always multithreaded since multithreading is built into oxipng
+
+jpg_opt.ps1 and jpg_opt_losless.ps1 multithread if ps version 7+
