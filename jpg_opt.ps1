@@ -198,20 +198,11 @@ function Optimize-File {
             $TempOutput = [System.IO.Path]::GetTempFileName() + ".jpg"
             
             try {
-                # Build full command line
+                # Build full command line and execute directly
                 $Arguments = "-outfile `"$TempOutput`" $Params `"$OriginalFile`""
+                & $MozJpegPath -outfile $TempOutput $Params.Split(' ') $OriginalFile 2>$null 1>$null
                 
-                $process = New-Object System.Diagnostics.Process
-                $process.StartInfo.FileName = $MozJpegPath
-                $process.StartInfo.Arguments = "-outfile `"$TempOutput`" $Params `"$OriginalFile`""
-                $process.StartInfo.UseShellExecute = $false
-                $process.StartInfo.CreateNoWindow = $true
-                $process.StartInfo.RedirectStandardOutput = $true
-                $process.StartInfo.RedirectStandardError = $true
-                $process.Start() | Out-Null
-                $process.WaitForExit()
-                
-                if ($process.ExitCode -eq 0 -and (Test-Path $TempOutput)) { 
+                if ($LASTEXITCODE -eq 0 -and (Test-Path $TempOutput)) { 
                     $TempSize = (Get-Item $TempOutput).Length
                     
                     # Find smallest size
@@ -274,7 +265,7 @@ function Optimize-File {
 
 # Process files depending on PowerShell version
 if ($UseParallel) {
-    # PowerShell 7+ - use parallel processing
+    # PowerShell 7+ - use parallel processing with System.Diagnostics.Process
     $Results = $Files | ForEach-Object -Parallel {
         # Recreate localization function inside parallel block
         function Get-LocalizedMessageParallel {
@@ -417,7 +408,7 @@ if ($UseParallel) {
         return $result
     } -ThrottleLimit $ThrottleLimit
 } else {
-    # PowerShell 5 and below - use sequential processing
+    # PowerShell 5 and below - use sequential processing with direct exe call
     $Results = $Files | ForEach-Object {
         Optimize-File -File $_ -MozJpegPath $MozJpegPath -ParameterSets $ParameterSets -OutputPath $OutputPath -InputPath $InputPath -ConfirmReplace $ConfirmReplace
     }

@@ -160,21 +160,11 @@ function Optimize-File {
         
         $OriginalSize = $File.Length
         
-        # Build jpegtran command using System.Diagnostics.Process
-        $processInfo = New-Object System.Diagnostics.ProcessStartInfo
-        $processInfo.FileName = $MozJpegPath
-        $processInfo.Arguments = "-outfile `"$OutputFile`" -copy none -optimize `"$OriginalFile`""
-        $processInfo.RedirectStandardOutput = $true
-        $processInfo.RedirectStandardError = $true
-        $processInfo.UseShellExecute = $false
-        $processInfo.CreateNoWindow = $true
+        # Build and execute jpegtran command using direct call
+        $arguments = '-outfile', "`"$OutputFile`"", '-copy', 'none', '-optimize', "`"$OriginalFile`""
+        & $MozJpegPath $arguments 2>$null
         
-        $process = New-Object System.Diagnostics.Process
-        $process.StartInfo = $processInfo
-        $process.Start() | Out-Null
-        $process.WaitForExit()
-        
-        if ($process.ExitCode -eq 0 -and (Test-Path $OutputFile)) { 
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $OutputFile)) { 
             $NewSize = (Get-Item $OutputFile).Length
             
             $EndTime = Get-Date
@@ -208,7 +198,7 @@ function Optimize-File {
 
 # Process files based on PowerShell version
 if ($UseParallel) {
-    # PowerShell 7+ - use parallel processing
+    # PowerShell 7+ - use parallel processing (System.Diagnostics.Process remains)
     $Results = $Files | ForEach-Object -Parallel {
         # Define localized message function inside parallel block to avoid scope issues
         function Get-LocalizedMessageParallel {
@@ -306,7 +296,7 @@ if ($UseParallel) {
         return $result
     } -ThrottleLimit $ThrottleLimit
 } else {
-    # PowerShell 5 and below - use sequential processing
+    # PowerShell 5 and below - use sequential processing with direct call
     $Results = $Files | ForEach-Object {
         Optimize-File -File $_ -MozJpegPath $MozJpegPath -OutputPath $OutputPath -InputPath $InputPath -ConfirmReplace $ConfirmReplace
     }

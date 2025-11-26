@@ -149,20 +149,10 @@ function Optimize-File {
         # Build oxipng command arguments
         $Arguments = "-o max --strip safe -Z --fast -q --out `"$OutputFile`" `"$OriginalFile`""
         
-        # Create and configure process
-        $process = New-Object System.Diagnostics.Process
-        $process.StartInfo.FileName = $OxipngPath
-        $process.StartInfo.Arguments = $Arguments
-        $process.StartInfo.UseShellExecute = $false
-        $process.StartInfo.CreateNoWindow = $true
-        $process.StartInfo.RedirectStandardOutput = $true
-        $process.StartInfo.RedirectStandardError = $true
+        # Directly call oxipng using &
+        & $OxipngPath -o max --strip safe -q --out $OutputFile $OriginalFile
         
-        # Start process and wait for exit
-        $process.Start() | Out-Null
-        $process.WaitForExit()
-        
-        if ($process.ExitCode -eq 0 -and (Test-Path $OutputFile)) { 
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $OutputFile)) { 
             $NewSize = (Get-Item $OutputFile).Length
             
             $EndTime = Get-Date
