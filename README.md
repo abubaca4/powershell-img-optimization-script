@@ -1,30 +1,68 @@
-# powershell-img-optimization-script
-Using oxipng and mozjpeg
+# PowerShell Image Optimization Suite
 
-Place oxipng.exe in oxipng dir, cjpeg-static.exe, jpegtran-static.exe in mozjpeg dir and gifdiff.exe, gifsicle.exe in gifsicle dir
+A collection of PowerShell scripts for batch image optimization using industry-standard tools (**oxipng**, **MozJPEG**, and **Gifsicle**). These scripts automate the process of finding the best compression parameters to reduce file size without compromising quality.
 
-Download exe from https://github.com/garyzyg/mozjpeg-windows/releases https://github.com/oxipng/oxipng/releases and https://eternallybored.org/misc/gifsicle/
+## 🛠 Prerequisites & Installation
 
-Using
+To use these scripts, you must download the required binaries and place them in specific subdirectories within the script folder.
 
-```.\<script name> "<input path>" "<output path>"```
+1.  **MozJPEG:** [Download from GitHub](https://github.com/garyzyg/mozjpeg-windows/releases)
+2.  **oxipng:** [Download from GitHub](https://github.com/oxipng/oxipng/releases)
+3.  **Gifsicle:** [Download from eternallybored.org](https://eternallybored.org/misc/gifsicle/)
 
-or
+**Required Directory Structure:**
+Ensure your folder looks like this:
 
-```.\<script name> "<input path>"```
+```text
+/ProjectRoot
+│   ├── mozjpeg/
+│   │   ├── cjpeg-static.exe
+│   │   └── jpegtran-static.exe
+│   ├── oxipng/
+│   │   └── oxipng.exe
+│   ├── gifsicle/
+│   │   ├── gifsicle.exe
+│   │   └── gifdiff.exe
+│   ├── jpg_opt.ps1
+│   ├── png_opt.ps1
+│   └── ... (other scripts)
+```
 
-jpg_opt.ps1 test 21 parameter combinations and select best
+## 🚀 Usage
 
-jpg_opt_losless.ps1 use jpegtran to losless jpg optimization
+Run the scripts via PowerShell. You can either specify an output directory or omit it to optimize files in place (you will be prompted to confirm replacement).
 
-png_opt.ps1 oxipng optimization
+**Syntax:**
 
-png_opt_slow.ps1 oxipng optimization with Zopfli(x100 slower, 2-8% better)
+```powershell
+.\<Script_Name.ps1> "<Input Path>" "<Output Path>"
+# OR
+.\<Script_Name.ps1> "<Input Path>"
+```
 
-gif_opt_losless.ps1 gifsicle with -O3 -j<core> and result check with gifdiff
+**Example:**
 
-png_opt.ps1 and png_opt_slow.ps1 always multithreaded since multithreading is built into oxipng
+```powershell
+.\jpg_opt.ps1 "C:\Photos\Input" "C:\Photos\Optimized"
+```
 
-jpg_opt.ps1 and jpg_opt_losless.ps1 multithread if ps version 7+
+## 📜 Script Descriptions
 
-png_opt_not_safe.ps1 and png_opt_slow_not_safe.ps1 make png files that can not open in some apps and break transparency in some apps. But result size is litle less.
+| Script Name | Target | Description | Multithreading |
+| :--- | :--- | :--- | :--- |
+| **`jpg_opt.ps1`** | JPG/PNG | **Brute-force optimization.** Tests 21 different MozJPEG parameter combinations for every file and selects the smallest result. Can also convert PNG inputs to highly compressed JPGs. | PS 7+ |
+| **`jpg_opt_losless.ps1`** | JPG | **Lossless.** Uses `jpegtran` to optimize Huffman tables and remove metadata without changing image data. | PS 7+ |
+| **`png_opt.ps1`** | PNG | **Balanced.** Uses `oxipng` with standard optimization settings. | Native\* |
+| **`png_opt_slow.ps1`** | PNG | **Maximum Compression.** Uses `oxipng` with the **Zopfli** algorithm. Approx. 100x slower, but results in 2-8% smaller files. | Native\* |
+| **`gif_opt_losless.ps1`** | GIF | **Lossless.** Uses `gifsicle` (O3) and verifies integrity using `gifdiff` to ensure frames are identical to the source. | Native\* |
+| **`*_not_safe.ps1`** | PNG | **Aggressive/Unsafe.** Removes all chunks/metadata and uses aggressive alpha handling. **Warning:** May break transparency or prevent files from opening in strictly compliant software. | Native\* |
+
+> \***Note on Multithreading:**
+>
+>   * **Native:** `oxipng` has built-in multithreading, so PNG scripts work fast on all PowerShell versions. `gifsicle` has built-in multithreading with -j but not always work good.
+>   * **PS 7+:** JPG scripts utilize `ForEach-Object -Parallel` which requires **PowerShell Core 7.0** or higher for parallel processing. On older versions (PS 5.1), they will run sequentially.
+
+## ⚠️ Important Notes
+
+  * **Backup:** Always backup your images before running "unsafe" scripts or choosing to overwrite original files.
+  * **System Language:** Scripts automatically detect system language (English/Russian) for console output.
