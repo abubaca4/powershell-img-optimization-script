@@ -48,8 +48,8 @@ $Messages = @{
         "en" = "ERROR: {0} - {1}"
     }
     "ReplacePrompt" = @{
-        "ru" = "Заменить оригинальные jpg или png файлы сжатыми версиями? Нажмите Y для ДА или N для НЕТ и нажмите ENTER"
-        "en" = "Replace original jpg or png files with compressed versions? Press Y for YES or N for NO and press ENTER"
+        "ru" = "Заменить оригинальные файлы изображений сжатыми версиями? Нажмите Y для ДА или N для НЕТ и нажмите ENTER"
+        "en" = "Replace original image files with compressed versions? Press Y for YES or N for NO and press ENTER"
     }
     "DoneReplaced" = @{
         "ru" = "Готово. Оригинальные файлы были заменены."
@@ -146,19 +146,26 @@ $ParameterSets = @(
     "-tune-ssim -quant-table 3 -nojfif -dc-scan-opt 2"
 )
 
+# Define image extensions to convert to JPG
+$ConvertToJpgExtensions = @('.png', '.ppm', '.pnm', '.pgm', '.pbm', '.bmp', '.dib', '.tga', '.icb', '.vda', '.vst', '.rle')
+
+# Define all image extensions to process (including JPG formats)
+$AllImageExtensions = $ConvertToJpgExtensions + @('.jpg', '.jpeg')
+
+# Create include patterns for Get-ChildItem
+$IncludePatterns = $AllImageExtensions | ForEach-Object { "*$_" }
+
 Write-Host (Get-LocalizedMessage "Start" -FormatArgs (Get-Date))
 Write-Host (Get-LocalizedMessage "SizeHeader")
 Write-Host (Get-LocalizedMessage "SizeRowHeader")
 
-# Get all files for processing
-$Files = Get-ChildItem -Path $InputPath -Include *.jpg, *.jpeg, *.png, *.ppm, *.pnm, *.pgm, *.pbm, *.bmp, *.dib, *.tga, *.icb, *.vda, *.vst, *.rle -Recurse -File
+# Get all files for processing using the variable
+$Files = Get-ChildItem -Path $InputPath -Include $IncludePatterns -Recurse -File
 
 # Function to process a single file
 function Optimize-File {
-    param($File, $MozJpegPath, $ParameterSets, $OutputPath, $InputPath, $ConfirmReplace)
+    param($File, $MozJpegPath, $ParameterSets, $OutputPath, $InputPath, $ConfirmReplace, $ConvertToJpgExtensions)
 
-    $ConvertToJpgExtensions = @('.png', '.ppm', '.pnm', '.pgm', '.pbm', '.bmp', '.dib', '.tga', '.icb', '.vda', '.vst', '.rle')
-    
     $StartTime = Get-Date
     $OriginalFile = $File.FullName
 
@@ -287,9 +294,7 @@ if ($UseParallel) {
         }
 
         function Optimize-File {
-            param($File, $MozJpegPath, $ParameterSets, $OutputPath, $InputPath, $ConfirmReplace)
-
-            $ConvertToJpgExtensions = @('.png', '.ppm', '.pnm', '.pgm', '.pbm', '.bmp', '.dib', '.tga', '.icb', '.vda', '.vst', '.rle')
+            param($File, $MozJpegPath, $ParameterSets, $OutputPath, $InputPath, $ConfirmReplace, $ConvertToJpgExtensions)
             
             $StartTime = Get-Date
             $OriginalFile = $File.FullName
@@ -404,13 +409,13 @@ if ($UseParallel) {
         }
         
         # Call function for current file
-        $result = Optimize-File -File $_ -MozJpegPath $using:MozJpegPath -ParameterSets $using:ParameterSets -OutputPath $using:OutputPath -InputPath $using:InputPath -ConfirmReplace $using:ConfirmReplace
+        $result = Optimize-File -File $_ -MozJpegPath $using:MozJpegPath -ParameterSets $using:ParameterSets -OutputPath $using:OutputPath -InputPath $using:InputPath -ConfirmReplace $using:ConfirmReplace -ConvertToJpgExtensions $using:ConvertToJpgExtensions
         return $result
     } -ThrottleLimit $ThrottleLimit
 } else {
     # PowerShell 5 and below - use sequential processing with direct exe call
     $Results = $Files | ForEach-Object {
-        Optimize-File -File $_ -MozJpegPath $MozJpegPath -ParameterSets $ParameterSets -OutputPath $OutputPath -InputPath $InputPath -ConfirmReplace $ConfirmReplace
+        Optimize-File -File $_ -MozJpegPath $MozJpegPath -ParameterSets $ParameterSets -OutputPath $OutputPath -InputPath $InputPath -ConfirmReplace $ConfirmReplace -ConvertToJpgExtensions $ConvertToJpgExtensions
     }
 }
 
@@ -422,14 +427,14 @@ if ($ConfirmReplace -and $Results -ne $null) {
     if ($Response -eq 'Y' -or $Response -eq 'y') {
         foreach ($Result in $Results) {
             if ($Result -ne $null) {
-                $OriginalExt = [System.IO.Path]::GetExtension($Result.OriginalFile)
-                if ($OriginalExt -eq '.png') {
-                    # For PNG delete original and rename JPG
+                $OriginalExt = [System.IO.Path]::GetExtension($Result.OriginalFile).ToLower()
+                if ($ConvertToJpgExtensions -contains $OriginalExt) {
+                    # For non-JPG formats: delete original and rename JPG
                     Remove-Item $Result.OriginalFile -Force -ErrorAction SilentlyContinue
-                    $NewName = $Result.OriginalFile -replace '\.png$', '.jpg'
+                    $NewName = $Result.OriginalFile -replace '\.[^\.]+$', '.jpg'
                     Move-Item $Result.OutputFile $NewName -Force
                 } else {
-                    # For JPG replace original
+                    # For JPG files: replace original
                     Move-Item $Result.OutputFile $Result.OriginalFile -Force
                 }
             }
