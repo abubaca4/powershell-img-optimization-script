@@ -151,11 +151,13 @@ Write-Host (Get-LocalizedMessage "SizeHeader")
 Write-Host (Get-LocalizedMessage "SizeRowHeader")
 
 # Get all files for processing
-$Files = Get-ChildItem -Path $InputPath -Include *.jpg, *.jpeg, *.png -Recurse -File
+$Files = Get-ChildItem -Path $InputPath -Include *.jpg, *.jpeg, *.png, *.ppm, *.pnm, *.pgm, *.pbm, *.bmp, *.dib, *.tga, *.icb, *.vda, *.vst, *.rle -Recurse -File
 
 # Function to process a single file
 function Optimize-File {
     param($File, $MozJpegPath, $ParameterSets, $OutputPath, $InputPath, $ConfirmReplace)
+
+    $ConvertToJpgExtensions = @('.png', '.ppm', '.pnm', '.pgm', '.pbm', '.bmp', '.dib', '.tga', '.icb', '.vda', '.vst', '.rle')
     
     $StartTime = Get-Date
     $OriginalFile = $File.FullName
@@ -164,7 +166,7 @@ function Optimize-File {
         # Determine output filename
         if ($ConfirmReplace) {
             # If output to the same folder
-            if ($File.Extension -eq '.png') {
+            if ($ConvertToJpgExtensions -contains $File.Extension.ToLower()) {
                 $OutputFile = Join-Path $File.DirectoryName ($File.BaseName + ".opti.jpg")
             } else {
                 $OutputFile = $File.FullName + ".opti.jpg"
@@ -175,8 +177,8 @@ function Optimize-File {
                 $RelativePath = $File.FullName.Substring($InputPath.Length).TrimStart('\', '/')
             }
             
-            if ($File.Extension -eq '.png') {
-                $OutputFile = Join-Path $OutputPath ($File.BaseName + ".jpg")
+            if ($ConvertToJpgExtensions -contains $File.Extension.ToLower()) {
+                $OutputFile = Join-Path $File.DirectoryName ($File.BaseName + ".opti.jpg")
             } else {
                 $OutputFile = Join-Path $OutputPath ($File.BaseName + ".opti.jpg")
             }
@@ -286,6 +288,8 @@ if ($UseParallel) {
 
         function Optimize-File {
             param($File, $MozJpegPath, $ParameterSets, $OutputPath, $InputPath, $ConfirmReplace)
+
+            $ConvertToJpgExtensions = @('.png', '.ppm', '.pnm', '.pgm', '.pbm', '.bmp', '.dib', '.tga', '.icb', '.vda', '.vst', '.rle')
             
             $StartTime = Get-Date
             $OriginalFile = $File.FullName
@@ -294,7 +298,7 @@ if ($UseParallel) {
                 # Determine output filename
                 if ($ConfirmReplace) {
                     # If output to the same folder
-                    if ($File.Extension -eq '.png') {
+                    if ($ConvertToJpgExtensions -contains $File.Extension.ToLower()) {
                         $OutputFile = Join-Path $File.DirectoryName ($File.BaseName + ".opti.jpg")
                     } else {
                         $OutputFile = $File.FullName + ".opti.jpg"
@@ -305,7 +309,7 @@ if ($UseParallel) {
                         $RelativePath = $File.FullName.Substring($InputPath.Length).TrimStart('\', '/')
                     }
                     
-                    if ($File.Extension -eq '.png') {
+                    if ($ConvertToJpgExtensions -contains $File.Extension.ToLower()) {
                         $OutputFile = Join-Path $OutputPath ($File.BaseName + ".jpg")
                     } else {
                         $OutputFile = Join-Path $OutputPath ($File.BaseName + ".opti.jpg")

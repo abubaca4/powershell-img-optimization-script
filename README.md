@@ -50,7 +50,7 @@ Run the scripts via PowerShell. You can either specify an output directory or om
 
 | Script Name | Target | Description | Multithreading |
 | :--- | :--- | :--- | :--- |
-| **`jpg_opt.ps1`** | JPG/PNG | **Brute-force optimization.** Tests 21 different MozJPEG parameter combinations for every file and selects the smallest result. Can also convert PNG inputs to highly compressed JPGs. | PS 7+ |
+| **`jpg_opt.ps1`** | JPG, PNG, PPM, PNM, PGM, PBM, BMP, DIB, TGA, ICB, VDA, VST, RLE | **Brute-force optimization.** Tests 21 different MozJPEG parameter combinations for every file and selects the smallest result. Converts all non-JPG inputs (PNG, PPM, BMP, TGA, etc.) to highly compressed JPG format. | PS 7+ |
 | **`jpg_opt_losless.ps1`** | JPG | **Lossless.** Uses `jpegtran` to optimize Huffman tables and remove metadata without changing image data. | PS 7+ |
 | **`png_opt.ps1`** | PNG | **Balanced.** Uses `oxipng` with standard optimization settings. | Native\* |
 | **`png_opt_slow.ps1`** | PNG | **Maximum Compression.** Uses `oxipng` with the **Zopfli** algorithm. Approx. 100x slower, but results in 2-8% smaller files. | Native\* |
