@@ -38,29 +38,28 @@ function Get-Msg {
 
 # --- 2. Input validation ---
 if (-not $InputPath) { Write-Error "Input Path Missing"; exit 1 }
-if (-not (Test-Path $InputPath)) { Write-Error "Input Path not found: $InputPath"; exit 1 }
+if (-not (Test-Path -LiteralPath $InputPath)) { Write-Error "Input Path not found: $InputPath"; exit 1 }
 
 if (-not $OutputPath) {
     $OutputPath = $InputPath
     $ConfirmReplace = $true
 } else {
-    if (-not (Test-Path $OutputPath)) { New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null }
+    if (-not (Test-Path -LiteralPath $OutputPath)) { New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null }
     $ConfirmReplace = $false
 }
 
-if (-not (Test-Path $ToolPath)) { Write-Error "Tool not found: $ToolPath"; exit 1 }
+if (-not (Test-Path -LiteralPath $ToolPath)) { Write-Error "Tool not found: $ToolPath"; exit 1 }
 
 # --- 3. Collecting files ---
 Write-Host (Get-Msg "Start" (Get-Date))
 Write-Host (Get-Msg "SizeHeader")
 Write-Host (Get-Msg "SizeRowHeader")
 
-$Files = Get-ChildItem -Path $InputPath -Include $Extensions -Recurse -File
+$Files = Get-ChildItem -LiteralPath $InputPath -Include $Extensions -Recurse -File
 
 # --- 4. Parallel processing ---
 if ($ThrottleLimit -le 0) {
     $ProcessorCores = (Get-CimInstance Win32_Processor).NumberOfCores
-    # Leave some resource headroom as brute-force creates many short processes
     $ThrottleLimit = if ($ProcessorCores) { [math]::Max(1, $ProcessorCores) } else { 2 }
 }
 
@@ -68,7 +67,7 @@ if ($ThrottleLimit -le 0) {
 $AsciiTempDir = $null
 if ($AsciiTempMode) {
     $AsciiTempDir = Join-Path $env:TEMP "imgopt_ascii_temp"
-    if (-not (Test-Path $AsciiTempDir)) {
+    if (-not (Test-Path -LiteralPath $AsciiTempDir)) {
         New-Item -ItemType Directory -Path $AsciiTempDir -Force | Out-Null
     }
 }
@@ -97,7 +96,6 @@ $Results = $Files | ForEach-Object -Parallel {
         return $t
     }
 
-    # Function for safe process execution (Fix Deadlock)
     function Run-ProcessSafe {
         param($Exe, $Arguments)
 
@@ -114,17 +112,11 @@ $Results = $Files | ForEach-Object -Parallel {
 
         try {
             $p.Start() | Out-Null
-
-            # Asynchronous stream reading to prevent buffer deadlock
             $stdOutTask = $p.StandardOutput.ReadToEndAsync()
             $stdErrTask = $p.StandardError.ReadToEndAsync()
-
             $p.WaitForExit()
-
-            # Wait for reading to complete (usually instant after exit)
             $null = $stdOutTask.Result
             $null = $stdErrTask.Result
-
             return $p.ExitCode
         }
         finally {
@@ -144,7 +136,7 @@ $Results = $Files | ForEach-Object -Parallel {
     } else {
         $RelPath = $File.DirectoryName.Substring($InDirRoot.Length).TrimStart('\', '/')
         $TargetDir = Join-Path $OutDirRoot $RelPath
-        if (-not (Test-Path $TargetDir)) { New-Item -ItemType Directory -Path $TargetDir -Force | Out-Null }
+        if (-not (Test-Path -LiteralPath $TargetDir)) { New-Item -ItemType Directory -Path $TargetDir -Force | Out-Null }
         $FinalOutputFile = Join-Path $TargetDir $NewName
     }
 
@@ -158,30 +150,24 @@ $Results = $Files | ForEach-Object -Parallel {
 
     try {
         if ($AsciiTempMode) {
-            # Create temporary file with ASCII name
             $tempFileName = [System.IO.Path]::GetRandomFileName()
             $ext = $File.Extension
             $AsciiTempInputFile = Join-Path $AsciiTempDir ($tempFileName + $ext)
 
-            # Copy source file to temporary directory
-            Copy-Item -Path $File.FullName -Destination $AsciiTempInputFile -Force
+            Copy-Item -LiteralPath $File.FullName -Destination $AsciiTempInputFile -Force
             $SourceFile = $AsciiTempInputFile
         }
 
-        # Iterate through argument sets
         foreach ($ArgsTemplate in $ArgSets) {
             $TempFile = [System.IO.Path]::GetTempFileName()
             if ($OutExt) { $TempFile += $OutExt }
 
             $CurrentArgs = $ArgsTemplate.Replace("{src}", "`"$SourceFile`"").Replace("{dest}", "`"$TempFile`"")
-
-            # EXECUTE WITH DEADLOCK PROTECTION
             $ExitCode = Run-ProcessSafe -Exe $ToolPath -Arguments $CurrentArgs
 
-            if ($ExitCode -eq 0 -and (Test-Path $TempFile) -and (Get-Item $TempFile).Length -gt 0) {
-                $CurSize = (Get-Item $TempFile).Length
+            if ($ExitCode -eq 0 -and (Test-Path -LiteralPath $TempFile) -and (Get-Item -LiteralPath $TempFile).Length -gt 0) {
+                $CurSize = (Get-Item -LiteralPath $TempFile).Length
 
-                # Validation (if required)
                 $ValidationPassed = $true
                 if ($ValPath) {
                     $vArgs = $ValArgs.Replace("{src}", "`"$SourceFile`"").Replace("{dest}", "`"$TempFile`"")
@@ -192,30 +178,28 @@ $Results = $Files | ForEach-Object -Parallel {
                 if ($ValidationPassed -and $CurSize -lt $BestSize) {
                     $BestSize = $CurSize
                     $BestParams = $ArgsTemplate
-                    if ($BestTempFile -and (Test-Path $BestTempFile)) { Remove-Item $BestTempFile -ErrorAction SilentlyContinue }
+                    if ($BestTempFile -and (Test-Path -LiteralPath $BestTempFile)) { Remove-Item -LiteralPath $BestTempFile -ErrorAction SilentlyContinue }
                     $BestTempFile = $TempFile
                 } else {
-                    Remove-Item $TempFile -ErrorAction SilentlyContinue
+                    Remove-Item -LiteralPath $TempFile -ErrorAction SilentlyContinue
                 }
             } else {
-                Remove-Item $TempFile -ErrorAction SilentlyContinue
+                Remove-Item -LiteralPath $TempFile -ErrorAction SilentlyContinue
             }
         }
 
         $TimeSpent = [math]::Round(((Get-Date) - $StartTime).TotalSeconds, 2)
 
         if ($BestTempFile -and $BestSize -lt $OriginalSize) {
-            # Copy result to final folder
-            Copy-Item -Path $BestTempFile -Destination $FinalOutputFile -Force
-            Remove-Item $BestTempFile -ErrorAction SilentlyContinue
+            Copy-Item -LiteralPath $BestTempFile -Destination $FinalOutputFile -Force
+            Remove-Item -LiteralPath $BestTempFile -ErrorAction SilentlyContinue
 
             $Percent = [math]::Round(($BestSize / $OriginalSize) * 100, 2)
-            # Show parameters only if there was iteration (more than 1 set)
             $ParamInfo = if ($ArgSets.Count -gt 1) { " [Params: $BestParams]" } else { "" }
             Write-Host "$OriginalSize`t$BestSize`t$Percent`t`t$($File.Name) ($TimeSpent)$ParamInfo"
             return @{ Original = $File.FullName; Optimized = $FinalOutputFile; Success = $true }
         } else {
-            if ($BestTempFile) { Remove-Item $BestTempFile -ErrorAction SilentlyContinue }
+            if ($BestTempFile) { Remove-Item -LiteralPath $BestTempFile -ErrorAction SilentlyContinue }
             Write-Host "$OriginalSize`t----`t$(Get-MsgPar 'NotCompressed')`t`t$($File.Name)"
             return $null
         }
@@ -225,9 +209,8 @@ $Results = $Files | ForEach-Object -Parallel {
         return $null
     }
     finally {
-        # Remove temporary ASCII file if it was created
-        if ($AsciiTempMode -and $AsciiTempInputFile -and (Test-Path $AsciiTempInputFile)) {
-            Remove-Item $AsciiTempInputFile -ErrorAction SilentlyContinue
+        if ($AsciiTempMode -and $AsciiTempInputFile -and (Test-Path -LiteralPath $AsciiTempInputFile)) {
+            Remove-Item -LiteralPath $AsciiTempInputFile -ErrorAction SilentlyContinue
         }
     }
 
@@ -237,7 +220,6 @@ Write-Host (Get-Msg "End" (Get-Date))
 
 # --- 5. Replacement ---
 if ($ConfirmReplace -and $Results) {
-    # Filter only successful results
     $SuccessfulResults = $Results | Where-Object { $_ -and $_.Success }
 
     if ($SuccessfulResults.Count -gt 0) {
@@ -246,21 +228,16 @@ if ($ConfirmReplace -and $Results) {
             foreach ($Res in $SuccessfulResults) {
                 if ($Res.Success) {
                     $OriginalFile = $Res.Original
-                    $OptimizedFile = $Res.Optimized # This is our .opti file
+                    $OptimizedFile = $Res.Optimized
 
-                    # Determine the final extension
                     $FinalExt = [System.IO.Path]::GetExtension($OptimizedFile).Replace(".opti", "")
                     $FinalPath = [System.IO.Path]::ChangeExtension($OriginalFile, $FinalExt)
 
                     if ($OriginalFile -eq $FinalPath) {
-                        # Scenario 1: Simple replacement (JPG -> JPG, PNG -> PNG)
-                        Move-Item $OptimizedFile $OriginalFile -Force
+                        Move-Item -LiteralPath $OptimizedFile -Destination $OriginalFile -Force
                     } else {
-                        # Scenario 2: Conversion (PNG -> JPG)
-                        # 1. Delete old PNG
-                        if (Test-Path $OriginalFile) { Remove-Item $OriginalFile -Force }
-                        # 2. Rename .opti.jpg to .jpg
-                        Move-Item $OptimizedFile $FinalPath -Force
+                        if (Test-Path -LiteralPath $OriginalFile) { Remove-Item -LiteralPath $OriginalFile -Force }
+                        Move-Item -LiteralPath $OptimizedFile -Destination $FinalPath -Force
                     }
                 }
             }
@@ -275,7 +252,6 @@ if ($ConfirmReplace -and $Results) {
     Write-Host (Get-Msg "DoneSaved" $OutputPath)
 }
 
-# Remove temporary directory if it was created
-if ($AsciiTempMode -and $AsciiTempDir -and (Test-Path $AsciiTempDir)) {
-    Remove-Item $AsciiTempDir -Recurse -Force -ErrorAction SilentlyContinue
+if ($AsciiTempMode -and $AsciiTempDir -and (Test-Path -LiteralPath $AsciiTempDir)) {
+    Remove-Item -LiteralPath $AsciiTempDir -Recurse -Force -ErrorAction SilentlyContinue
 }
